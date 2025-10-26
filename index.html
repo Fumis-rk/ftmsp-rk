@@ -1,211 +1,184 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ranking FTM-SP 2025</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-    <link
-      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
-      rel="stylesheet"
-    />
-  </head>
-  <body class="bg-gray-100 text-gray-800">
-    <div id="root"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ranking FTM-SP 2025</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-900">
+<div id="root"></div>
 
-    <script type="text/babel">
-      const App = () => {
-        const [dados, setDados] = React.useState([]);
-        const [categoriaSelecionada, setCategoriaSelecionada] = React.useState("");
-        const [atletaSelecionado, setAtletaSelecionado] = React.useState(null);
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
 
-        // Carrega o CSV
-        React.useEffect(() => {
-          Papa.parse("ranking.csv", {
-            download: true,
-            header: true,
-            complete: (result) => {
-              setDados(result.data);
+function App() {
+  const [dados, setDados] = useState([]);
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState("");
+  const [atletaSelecionado, setAtletaSelecionado] = useState(null);
+
+  // Carrega CSV
+  useEffect(() => {
+    Papa.parse("ranking.csv", {
+      download: true,
+      header: true,
+      complete: (result) => setDados(result.data.filter(r => r["Nome"])),
+    });
+  }, []);
+
+  // Lista de categorias
+  const categorias = useMemo(() => {
+    const unicas = [...new Set(dados.map(d => d["Categoria/Classe"]).filter(Boolean))];
+    return unicas.sort();
+  }, [dados]);
+
+  // Atletas filtrados e ordenados com empate
+  const atletasFiltrados = useMemo(() => {
+    if (!categoriaSelecionada) return [];
+    const lista = dados
+      .filter(d => d["Categoria/Classe"] === categoriaSelecionada)
+      .map(d => ({ ...d, Pontos: Number(d.Pontos) || 0 }))
+      .sort((a, b) => b.Pontos - a.Pontos);
+
+    let pos = 1;
+    return lista.map((a, i) => {
+      if (i > 0 && a.Pontos === lista[i - 1].Pontos) {
+        a.posicao = lista[i - 1].posicao;
+      } else {
+        a.posicao = pos;
+      }
+      pos++;
+      return a;
+    });
+  }, [dados, categoriaSelecionada]);
+
+  // Cria gráfico do atleta
+  useEffect(() => {
+    if (atletaSelecionado) {
+      setTimeout(() => {
+        const etapas = Object.keys(atletaSelecionado)
+          .filter(k => (k.startsWith("Etapa") || k.includes("Paulistão")));
+        const pontos = etapas.map(k => {
+          const valor = atletaSelecionado[k];
+          const num = Number(valor);
+          return isNaN(num) ? 0 : num;
+        });
+
+        const ctx = document.getElementById("graficoEtapas");
+        if (!ctx) return;
+        if (window.graficoEtapas) window.graficoEtapas.destroy();
+
+        window.graficoEtapas = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: etapas,
+            datasets: [{
+              label: "Pontuação",
+              data: pontos,
+              borderColor: "#dc2626",
+              backgroundColor: "rgba(220, 38, 38, 0.15)",
+              borderWidth: 3,
+              fill: true,
+              tension: 0.35,
+              pointRadius: 6,
+              pointBackgroundColor: "#dc2626",
+              pointBorderColor: "#fff",
+              pointBorderWidth: 2,
+              hoverRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "#111",
+                titleColor: "#fff",
+                bodyColor: "#fff",
+                padding: 10,
+                displayColors: false
+              }
             },
-          });
-        }, []);
-
-        // Lista de categorias
-        const categorias = React.useMemo(() => {
-          const unicas = [...new Set(dados.map((d) => d["Categoria/Classe"]))];
-          return unicas.filter((c) => c);
-        }, [dados]);
-
-        // Filtra e ordena atletas
-        const atletasFiltrados = React.useMemo(() => {
-          if (!categoriaSelecionada) return [];
-          const lista = dados
-            .filter((d) => d["Categoria/Classe"] === categoriaSelecionada)
-            .map((d) => ({
-              ...d,
-              Pontos: Number(d.Pontos) || 0,
-            }))
-            .sort((a, b) => b.Pontos - a.Pontos);
-
-          // Adiciona posição considerando empates
-          let pos = 1;
-          return lista.map((a, i) => {
-            if (i > 0 && a.Pontos === lista[i - 1].Pontos) {
-              a.posicao = lista[i - 1].posicao;
-            } else {
-              a.posicao = pos;
+            scales: {
+              x: { ticks: { color: "#4b5563", font: { size: 12, weight: "500" } }, grid: { color: "rgba(0,0,0,0.05)" } },
+              y: { beginAtZero: true, ticks: { color: "#4b5563", font: { size: 12, weight: "500" } }, grid: { color: "rgba(0,0,0,0.05)" } }
             }
-            pos++;
-            return a;
-          });
-        }, [dados, categoriaSelecionada]);
-
-        // Renderiza gráfico quando clica no atleta
-        React.useEffect(() => {
-          if (atletaSelecionado) {
-            setTimeout(() => {
-              const etapas = Object.keys(atletaSelecionado).filter((k) =>
-                k.startsWith("Etapa")
-              );
-              const pontos = etapas.map((k) => Number(atletaSelecionado[k]) || 0);
-              const ctx = document.getElementById("graficoEtapas");
-              if (!ctx) return;
-              if (window.graficoEtapas) window.graficoEtapas.destroy();
-              window.graficoEtapas = new Chart(ctx, {
-                type: "line",
-                data: {
-                  labels: etapas,
-                  datasets: [
-                    {
-                      label: "Pontuação",
-                      data: pontos,
-                      borderColor: "#dc2626",
-                      backgroundColor: "rgba(220, 38, 38, 0.15)",
-                      borderWidth: 3,
-                      fill: true,
-                      tension: 0.35,
-                      pointRadius: 6,
-                      pointBackgroundColor: "#dc2626",
-                      pointBorderColor: "#fff",
-                      pointBorderWidth: 2,
-                      hoverRadius: 8,
-                    },
-                  ],
-                },
-                options: {
-                  responsive: true,
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      backgroundColor: "#111",
-                      titleColor: "#fff",
-                      bodyColor: "#fff",
-                      padding: 10,
-                      displayColors: false,
-                    },
-                  },
-                  scales: {
-                    x: {
-                      ticks: { color: "#4b5563", font: { size: 12, weight: "500" } },
-                      grid: { color: "rgba(0,0,0,0.05)" },
-                    },
-                    y: {
-                      beginAtZero: true,
-                      ticks: { color: "#4b5563", font: { size: 12, weight: "500" } },
-                      grid: { color: "rgba(0,0,0,0.05)" },
-                    },
-                  },
-                },
-              });
-            }, 100);
           }
-        }, [atletaSelecionado]);
+        });
+      }, 100);
+    }
+  }, [atletaSelecionado]);
 
-        return (
-          <div className="p-6 max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-red-700 text-center mb-4">
-              Ranking FTM-SP 2025
-            </h1>
+  return (
+    <div className="container mx-auto p-4">
+      <img src="logoftmsp.png" alt="Logo FTMSP" className="h-24 mb-4 mx-auto" />
+      <h1 className="text-3xl font-bold text-red-700 mb-6 text-center">Ranking FTMSP 2025</h1>
+      <p className="text-gray-700 text-center mt-2">Clique no nome do atleta para mais detalhes</p>
 
-            {/* Seletor de categoria */}
-            <div className="mb-6 text-center">
-              <select
-                className="p-2 border rounded-md shadow-md"
-                onChange={(e) => setCategoriaSelecionada(e.target.value)}
+      {/* Seleção de categoria */}
+      <div className="mb-6 flex justify-center">
+        <select
+          className="p-2 border rounded-lg shadow"
+          value={categoriaSelecionada}
+          onChange={e => { setCategoriaSelecionada(e.target.value); setAtletaSelecionado(null); }}
+        >
+          <option value="">Selecione uma Categoria</option>
+          {categorias.map((c, i) => <option key={i} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Tabela de atletas */}
+      {categoriaSelecionada && !atletaSelecionado && (
+        <table className="min-w-full bg-white rounded-lg shadow overflow-hidden">
+          <thead className="bg-red-700 text-white">
+            <tr>
+              <th className="py-2 px-4">#</th>
+              <th className="py-2 px-4">Nome</th>
+              <th className="py-2 px-4">Equipe</th>
+              <th className="py-2 px-4">Pontos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {atletasFiltrados.map((atleta, index) => (
+              <tr
+                key={index}
+                className="border-b hover:bg-gray-100 cursor-pointer"
+                onClick={() => setAtletaSelecionado(atleta)}
               >
-                <option value="">Selecione uma categoria</option>
-                {categorias.map((cat, idx) => (
-                  <option key={idx} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <td className="py-2 px-4">{atleta.posicao}º</td>
+                <td className="py-2 px-4">{atleta.Nome}</td>
+                <td className="py-2 px-4">{atleta.Equipe}</td>
+                <td className="py-2 px-4">{atleta.Pontos}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
-            {/* Tabela de classificação */}
-            {categoriaSelecionada && (
-              <div className="bg-white shadow-lg rounded-lg p-4">
-                <h2 className="text-xl font-semibold mb-4 text-center text-gray-700">
-                  Classificação - {categoriaSelecionada}
-                </h2>
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b text-gray-700">
-                      <th className="p-2">Posição</th>
-                      <th className="p-2">Atleta</th>
-                      <th className="p-2">Equipe</th>
-                      <th className="p-2 text-right">Pontos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {atletasFiltrados.map((a, idx) => (
-                      <tr
-                        key={idx}
-                        className="border-b hover:bg-red-50 cursor-pointer transition"
-                        onClick={() => setAtletaSelecionado(a)}
-                      >
-                        <td className="p-2">{a.posicao}º</td>
-                        <td className="p-2 font-medium text-red-700">{a.Nome}</td>
-                        <td className="p-2">{a.Equipe}</td>
-                        <td className="p-2 text-right font-semibold">
-                          {a.Pontos.toFixed(0)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Painel lateral do atleta */}
-            {atletaSelecionado && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                <div className="bg-white rounded-xl shadow-2xl p-6 w-11/12 md:w-2/3 relative">
-                  <button
-                    className="absolute top-3 right-4 text-gray-500 hover:text-red-700 text-xl"
-                    onClick={() => setAtletaSelecionado(null)}
-                  >
-                    ✕
-                  </button>
-                  <h3 className="text-2xl font-bold mb-2 text-red-700">
-                    {atletaSelecionado.Nome}
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    {atletaSelecionado.Equipe} • {atletaSelecionado["Categoria/Classe"]}
-                  </p>
-                  <canvas id="graficoEtapas" height="180"></canvas>
-                </div>
-              </div>
-            )}
+      {/* Painel atleta */}
+      {atletaSelecionado && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-11/12 md:w-2/3 relative">
+            <button
+              className="absolute top-3 right-4 text-gray-500 hover:text-red-700 text-xl"
+              onClick={() => setAtletaSelecionado(null)}
+            >✕</button>
+            <h3 className="text-2xl font-bold mb-2 text-red-700">{atletaSelecionado.Nome}</h3>
+            <p className="text-gray-600 mb-4">{atletaSelecionado.Equipe} • {atletaSelecionado["Categoria/Classe"]}</p>
+            <canvas id="graficoEtapas" height="180"></canvas>
           </div>
-        );
-      };
+        </div>
+      )}
+    </div>
+  );
+}
 
-      ReactDOM.render(<App />, document.getElementById("root"));
-    </script>
-  </body>
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
 </html>
