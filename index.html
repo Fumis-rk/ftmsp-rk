@@ -72,22 +72,38 @@
                   <th className="py-2 px-4">Pontos</th>
                 </tr>
               </thead>
-              <tbody>
-                {atletas
-                  .sort((a, b) => b["Pontos"] - a["Pontos"])
-                  .map((atleta, index) => (
-                    <tr
-                      key={index}
-                      className="border-b hover:bg-gray-100 cursor-pointer"
-                      onClick={() => setAtletaSelecionado(atleta)}
-                    >
-                      <td className="py-2 px-4">{index + 1}</td>
-                      <td className="py-2 px-4">{atleta["Nome"]}</td>
-                      <td className="py-2 px-4">{atleta["Equipe"]}</td>
-                      <td className="py-2 px-4">{atleta["Pontos"]}</td>
-                    </tr>
-                  ))}
-              </tbody>
+             <tbody>
+  {(() => {
+    const ordenados = [...atletas].sort((a, b) => b["Pontos"] - a["Pontos"]);
+    let posicao = 1;
+    let posicaoReal = 1;
+    let ultimoPonto = null;
+
+    return ordenados.map((atleta, index) => {
+      const pontos = Number(atleta["Pontos"]) || 0;
+
+      if (ultimoPonto !== null && pontos < ultimoPonto) {
+        posicao = posicaoReal;
+      }
+
+      ultimoPonto = pontos;
+      posicaoReal++;
+
+      return (
+        <tr
+          key={index}
+          className="border-b hover:bg-gray-100 cursor-pointer"
+          onClick={() => setAtletaSelecionado(atleta)}
+        >
+          <td className="py-2 px-4">{posicao}º</td>
+          <td className="py-2 px-4">{atleta["Nome"]}</td>
+          <td className="py-2 px-4">{atleta["Equipe"]}</td>
+          <td className="py-2 px-4">{pontos}</td>
+        </tr>
+      );
+    });
+  })()}
+</tbody>
             </table>
           )}
 
